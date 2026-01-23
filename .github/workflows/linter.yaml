@@ -16,7 +16,9 @@ name: Lint Code Base
 
 on:
   pull_request:
-    branches: [main, working-draft]
+    branches:
+      - main
+      - 'release/**'
 
 permissions:
   contents: read      # Required to checkout the code
