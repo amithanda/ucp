@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ucp.dev/{{ ucp_version }}/schemas/common/identity_linking.json",
+  "name": "dev.ucp.common.identity_linking",
+  "version": "{{ ucp_version }}",
+  "title": "Identity Linking Capability",
+  "description": "Schema for authenticating and establishing verified connections between platforms and businesses.",
+
+  "$defs": {
+    "platform_schema": {
+      "allOf": [
+        { "$ref": "../capability.json#/$defs/platform_schema" },
+        {
+          "type": "object",
+          "properties": {
+            "config": {
+              "type": "object",
+              "properties": {
+                "supported_mechanisms": {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/mechanism" },
+                  "minItems": 1
+                }
+              },
+              "required": ["supported_mechanisms"]
+            }
+          }
+        }
+      ]
+    },
+
+    "business_schema": {
+      "allOf": [
+        { "$ref": "../capability.json#/$defs/business_schema" },
+        {
+          "type": "object",
+          "properties": {
+            "config": {
+              "type": "object",
+              "properties": {
+                "supported_mechanisms": {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/mechanism" },
+                  "minItems": 1
+                }
+              },
+              "required": ["supported_mechanisms"]
+            }
+          }
+        }
+      ]
+    },
+
+    "response_schema": {
+      "allOf": [{ "$ref": "../capability.json#/$defs/response_schema" }]
+    },
+
+    "mechanism": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Authentication mechanism type. Well-known values: `oauth2`, `verifiable_credential`."
+        },
+        "issuer": {
+          "type": "string",
+          "format": "uri",
+          "description": "The authorization server or credential issuer URL, typically supporting discovery specifications (e.g. RFC 8414 for oauth2)."
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

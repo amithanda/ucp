@@ -417,6 +417,21 @@ Businesses publish their profile at `/.well-known/ucp`. An example:
           "schema": "https://ucp.dev/{{ ucp_version }}/schemas/shopping/discount.json",
           "extends": "dev.ucp.shopping.checkout"
         }
+      ],
+      "dev.ucp.common.identity_linking": [
+        {
+          "version": "{{ ucp_version }}",
+          "spec": "https://ucp.dev/{{ ucp_version }}/specification/identity-linking",
+          "schema": "https://ucp.dev/{{ ucp_version }}/schemas/common/identity_linking.json",
+          "config": {
+            "supported_mechanisms": [
+              {
+                "type": "oauth2",
+                "issuer": "https://auth.merchant.example.com"
+              }
+            ]
+          }
+        }
       ]
     },
     "payment_handlers": {
@@ -517,6 +532,13 @@ example:
           "config": {
             "webhook_url": "https://platform.example.com/webhooks/ucp/orders"
           }
+        }
+      ],
+      "dev.ucp.common.identity_linking": [
+        {
+          "version": "{{ ucp_version }}",
+          "spec": "https://ucp.dev/{{ ucp_version }}/specification/identity-linking",
+          "schema": "https://ucp.dev/{{ ucp_version }}/schemas/common/identity_linking.json"
         }
       ]
     },
