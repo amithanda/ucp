@@ -29,7 +29,8 @@
               },
               "required": ["supported_mechanisms"]
             }
-          }
+          },
+          "required": ["config"]
         }
       ]
     },

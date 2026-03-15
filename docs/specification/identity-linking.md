@@ -317,7 +317,8 @@ The AI Shopping Agent only knows how to perform checkouts. It does NOT yet know 
    The first (and only) entry has `type: oauth2`, which the agent supports, so
    it is selected. The agent executes standard OAuth discovery (appending
    `/.well-known/oauth-authorization-server` to the issuer string) and validates
-   that the returned `issuer` exactly matches.
+   that the returned `issuer` exactly matches after normalization (trailing slash
+   stripping).
 4. **User Consent & Authorization**: The agent generates a consent URL to prompt
    the user (or invokes the authorization flow directly in the GUI), using the
    dynamically derived scopes.
