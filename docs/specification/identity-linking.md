@@ -137,6 +137,13 @@ discovery URL:
 **Issuer Validation**: Regardless of the discovery method used above, the
 platform **MUST** validate that the `issuer` value returned in the metadata
 exactly matches the `issuer` string defined in the capability configuration.
+
+*Issuer Normalization*: To prevent brittle integrations, the platform **MUST**
+normalize both the locally configured `issuer` and the remotely returned `issuer`
+by stripping any trailing slashes (`/`) before performing the exact string match
+comparison (i.e., `https://auth.example.com` and `https://auth.example.com/`
+**MUST** be evaluated as identical).
+
 Failure to validate the issuer exposes the integration to Mix-Up Attacks and
 **MUST** result in an aborted linking process.
 
@@ -303,7 +310,7 @@ The AI Shopping Agent only knows how to perform checkouts. It does NOT yet know 
       &iss=https://auth.merchant.example.com
     ```
 
-    _The user is prompted to consent **only** to "Manage Checkout Sessions"._
+    *The user is prompted to consent **only** to "Manage Checkout Sessions".*
 
 5. **Authorized UCP Execution**: The platform securely exchanges the
    authorization code for an `access_token` bound only to checkout and
