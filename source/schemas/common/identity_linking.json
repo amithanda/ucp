@@ -8,25 +8,7 @@
 
   "$defs": {
     "platform_schema": {
-      "allOf": [
-        { "$ref": "../capability.json#/$defs/platform_schema" },
-        {
-          "type": "object",
-          "properties": {
-            "config": {
-              "type": "object",
-              "properties": {
-                "supported_mechanisms": {
-                  "type": "array",
-                  "items": { "$ref": "#/$defs/mechanism" },
-                  "minItems": 1
-                }
-              },
-              "required": ["supported_mechanisms"]
-            }
-          }
-        }
-      ]
+      "allOf": [{ "$ref": "../capability.json#/$defs/platform_schema" }]
     },
 
     "business_schema": {
