@@ -679,8 +679,7 @@ for a session:
         - For multi-parent extensions (`extends: ["a", "b"]`): at least one parent
           must be present
     - **Scope Dependencies**: Remove any capability declaring `identity_scopes`
-      if the intersection does not contain a capability capable of negotiating
-      authorization (e.g., `dev.ucp.common.identity_linking`).
+      if `dev.ucp.common.identity_linking` is not present in the intersection.
 
 4. **Repeat pruning**: Continue step 3 until no more capabilities are removed
     (handles transitive extension chains and chained scope dependencies).
@@ -691,7 +690,7 @@ for a session:
     pruning loops have stabilized. Capabilities excluded during pruning MUST NOT
     contribute to the derived authorization scopes. If the final derived scope
     list is mathematically empty (no active capabilities request scopes), the
-    agent **MUST** abort the identity linking process.
+    agent **SHOULD** abort the identity linking process.
 
 The result is the set of capabilities both parties support at mutually
 compatible versions, with extension dependencies satisfied.
