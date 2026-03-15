@@ -109,11 +109,15 @@ intersection of negotiated capabilities**.
 
 ### Scope Structure & Mapping
 
-The scope complexity should be hidden in the consent screen shown to the user:
-they shouldn't see one row for each action, but rather a general one, for
-example "Allow \[platform\] to manage checkout sessions". A requested scope
-granting access to a capability must grant access to all operations strictly
-associated with the capability.
+Consent screens **MUST** present permissions to users in clear, human-readable
+language that accurately describes what access is being granted. Rather than
+listing each individual operation (Get, Create, Update, Delete, etc.) as a
+separate line, consent screens **SHOULD** group them under a single
+capability-level description (e.g., "Allow \[platform\] to manage checkout
+sessions"). This grouping is for readability — it **MUST NOT** reduce the
+transparency of what access the user is authorizing. A scope grants access to
+all operations associated with the capability and the consent screen must
+accurately reflect that.
 
 ### Scope Naming Convention
 
