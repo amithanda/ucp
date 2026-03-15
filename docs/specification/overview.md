@@ -689,7 +689,9 @@ for a session:
     authorization mechanisms (e.g., `dev.ucp.common.identity_linking`), scopes
     **MUST ONLY** be derived from the finalized intersection list *after* all
     pruning loops have stabilized. Capabilities excluded during pruning MUST NOT
-    contribute to the derived authorization scopes.
+    contribute to the derived authorization scopes. If the final derived scope
+    list is mathematically empty (no active capabilities request scopes), the
+    agent **MUST** abort the identity linking process.
 
 The result is the set of capabilities both parties support at mutually
 compatible versions, with extension dependencies satisfied.
