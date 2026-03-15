@@ -87,7 +87,9 @@ intersection of negotiated capabilities**.
 3. **Authorization:** The platform initiates the connection requesting **only**
    the derived scopes. If a capability (e.g., `order`) is excluded from the
    active capability set, its respective scopes **MUST NOT** be requested by the
-   platform.
+   platform. If the final derived scope list is completely empty, the platform
+   **MUST** abort the identity linking process, as there are no secured resources
+   to authorize.
 
 ### Scope Structure & Mapping
 
@@ -120,9 +122,9 @@ discovery URL:
 
 1. **Explicit Endpoint (Highest Priority)**: If the capability configuration
    provides a `discovery_endpoint` string, the platform **MUST** fetch metadata
-   directly from that exact URI. If this fetch fails, the platform **MUST**
-   abort the discovery process and **MUST NOT** fall back to any other
-   endpoints.
+   directly from that exact URI. If this fetch fails (e.g., non-2xx HTTP response
+   or connection timeout), the platform **MUST** abort the discovery process and
+   **MUST NOT** fall back to any other endpoints.
 2. **RFC 8414 Standard Discovery**: If no explicit endpoint is provided, the
    platform **MUST** append `/.well-known/oauth-authorization-server` to the
    defined `issuer` string and fetch.
@@ -131,6 +133,12 @@ discovery URL:
    `/.well-known/openid-configuration` to the defined `issuer` string and fetch.
    If this final fetch also fails, the platform **MUST** abort the identity
    linking process.
+
+**Issuer Validation**: Regardless of the discovery method used above, the
+platform **MUST** validate that the `issuer` value returned in the metadata
+exactly matches the `issuer` string defined in the capability configuration.
+Failure to validate the issuer exposes the integration to Mix-Up Attacks and
+**MUST** result in an aborted linking process.
 
 Example metadata retrieved via RFC 8414:
 
@@ -168,6 +176,12 @@ Example metadata retrieved via RFC 8414:
 - **MUST** implement the OAuth 2.0 Authorization Code flow
   (<a href="https://datatracker.ietf.org/doc/html/rfc6749#section-4.1" target="_blank">RFC
   6749 4.1</a>) as the primary linking mechanism.
+- **MUST** strictly implement Proof Key for Code Exchange (PKCE)
+  ([RFC 7636](https://datatracker.ietf.org/doc/html/rfc7636)) using the `S256`
+  challenge method to prevent authorization code interception attacks.
+- **MUST** securely validate the `iss` parameter returned in the authorization
+  response ([RFC 9207](https://www.rfc-editor.org/rfc/rfc9207.html)) to prevent
+  Mix-Up Attacks.
 - **SHOULD** include a unique, unguessable state parameter in the authorization
   request to prevent Cross-Site Request Forgery (CSRF)
   (<a href="https://datatracker.ietf.org/doc/html/rfc6749#section-10.12" target="_blank">RFC
@@ -189,6 +203,14 @@ Example metadata retrieved via RFC 8414:
   to declare the location of their OAuth 2.0 endpoints
   (`/.well-known/oauth-authorization-server`)
 - **MUST** enforce Client Authentication at the Token Endpoint.
+- **MUST** enforce exact string matching for the `redirect_uri` parameter during
+  the authorization request to prevent open redirects and token theft.
+- **MUST** enforce Proof Key for Code Exchange (PKCE)
+  ([RFC 7636](https://datatracker.ietf.org/doc/html/rfc7636)) validation at the
+  Token Endpoint for all authorization code exchanges.
+- **MUST** return the `iss` parameter in the authorization response
+  ([RFC 9207](https://www.rfc-editor.org/rfc/rfc9207.html)) matching the
+  established issuer string.
 - **MUST** provide an account creation flow if the user does not already have an
   account.
 - **MUST** support dynamically requested UCP scopes mapped strictly to the
@@ -204,22 +226,57 @@ Example metadata retrieved via RFC 8414:
 
 ## End-to-End Workflow & Example
 
-### Scenario: An AI Shopping Agent Checking Out
+### Scenario: An AI Shopping Agent (Platform) and a Shopping Merchant (Business)
 
-1. **Profile Discovery & Capability Negotiation**: The agent fetches the
-   merchant's `/.well-known/ucp` profile. The agent intersects its own profile
+#### 1. The Merchant's Profile (`/.well-known/ucp`)
+
+The Merchant supports checkout, order management, and secure identity features.
+
+```json
+{
+  "dev.ucp.shopping.checkout": [{ "version": "2026-03-14", "config": {} }],
+  "dev.ucp.shopping.order": [{ "version": "2026-03-14", "config": {} }],
+  "dev.ucp.common.identity_linking": [{
+    "version": "2026-03-14",
+    "config": {
+      "supported_mechanisms": [{
+        "type": "oauth2",
+        "issuer": "https://auth.merchant.example.com"
+      }]
+    }
+  }]
+}
+```
+
+#### 2. The AI Agent's Profile
+
+The AI Shopping Agent only knows how to perform checkouts. It does NOT yet know how to manage existing orders.
+
+```json
+{
+  "dev.ucp.shopping.checkout": [{ "version": "2026-03-14" }],
+  "dev.ucp.common.identity_linking": [{ "version": "2026-03-14" }]
+}
+```
+
+#### 3. Execution Steps
+
+1. **Capability Discovery & Intersection**: The AI Agent intersects its own profile
    with the business's and successfully negotiates `dev.ucp.shopping.checkout`
-   and `dev.ucp.common.identity_linking`. If the business supported
-   `dev.ucp.shopping.order`, but the agent did not, it is excluded.
-2. **Schema Fetch & Scope Derivation**: The agent parses the schema logic for
-   `dev.ucp.shopping.checkout` and derives that the required scope is strictly
-   `ucp:scopes:checkout_session`. `ucp:scopes:order_management` is strictly
+   and `dev.ucp.common.identity_linking`. `dev.ucp.shopping.order` is strictly
+   excluded because the agent does not support it.
+2. **Schema Fetch & Dynamic Scope Derivation**: The agent fetches the JSON Schema
+   definitions for the **Active Capability List** (`checkout.json` and
+   `identity_linking.json`). The agent parses the schema logic for
+   `dev.ucp.shopping.checkout`, looking for the top-level `"identity_scopes"`
+   annotation, and statically derives that the required scope is strictly
+   `ucp:scopes:checkout_session`. `ucp:scopes:order_management` is inherently
    omitted.
 3. **Identity Mechanism Execution**: Because `identity_linking` matched and
    defined mechanism `type: oauth2` with issuer
    `https://auth.merchant.example.com`, the agent executes standard OAuth
-   discovery by appending `/.well-known/oauth-authorization-server` to the
-   issuer string.
+   discovery (appending `/.well-known/oauth-authorization-server` to the issuer string)
+   and validates that the returned `issuer` exactly matches.
 4. **User Consent & Authorization**: The agent generates a consent URL to prompt
    the user (or invokes the authorization flow directly in the GUI), using the
    dynamically derived scopes.
@@ -227,10 +284,23 @@ Example metadata retrieved via RFC 8414:
     ```http
     GET https://auth.merchant.example.com/oauth2/authorize
       ?response_type=code
-      &client_id=agent_client_123
-      &redirect_uri=https://agent.example.com/callback
+      &client_id=shopping_agent_client_123
+      &redirect_uri=https://shoppingagent.com/callback
       &scope=ucp:scopes:checkout_session
       &state=xyz123
+      &code_challenge=code_challenge_123
+      &code_challenge_method=S256
+    ```
+
+    The business will respond with the authorization code and the `iss`
+    parameter per RFC 9207:
+
+    ```http
+    HTTP/1.1 302 Found
+    Location: https://shoppingagent.com/callback
+      ?code=code123
+      &state=xyz123
+      &iss=https://auth.merchant.example.com
     ```
 
     _The user is prompted to consent **only** to "Manage Checkout Sessions"._
