@@ -105,7 +105,7 @@ intersection of negotiated capabilities**.
    the finalized intersection. If a capability (e.g., `order`) is excluded from
    the active capability set, its respective scopes **MUST NOT** be requested by
    the platform. If the final derived scope list is completely empty, the platform
-   **SHOULD** abort the identity linking process, as there are no secured resources
+   **MUST** abort the identity linking process, as there are no secured resources
    to authorize.
 
 ### Scope Structure & Mapping
@@ -137,7 +137,7 @@ Example capability-to-scope mapping based on UCP schemas:
 
 | Resources       | Operation                                     | Scope Action                               |
 | :-------------- | :-------------------------------------------- | :----------------------------------------- |
-| CheckoutSession | Get, Create, Update, Delete, Cancel, Complete | `dev.ucp.shopping.scopes.checkout_session` |
+| CheckoutSession | Get, Create, Update, Cancel, Complete         | `dev.ucp.shopping.scopes.checkout_session` |
 
 ## Supported Mechanisms
 
