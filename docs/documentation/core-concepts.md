@@ -18,8 +18,8 @@
 
 The Universal Commerce Protocol (UCP) is an open standard for interoperability
 between commerce entities. It defines a common language and functional primitives
-so that clients and providers can interoperate securely and reliably across any
-commercial vertical.
+so that clients and providers can interoperate securely and reliably across
+commercial verticals.
 
 This document provides the detailed technical specification for UCP.
 For a complete definition of all data models and schemas, see the
