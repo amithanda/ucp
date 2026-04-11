@@ -16,14 +16,24 @@
 
 # Core Concepts
 
-The Universal Commerce Protocol (UCP) is an open standard for interoperability between commerce entities. It defines a common language and functional primitives so that clients and providers can interoperate securely and reliably across any commercial vertical.
+The Universal Commerce Protocol (UCP) is an open standard for interoperability
+between commerce entities. It defines a common language and functional primitives
+so that clients and providers can interoperate securely and reliably across any
+commercial vertical.
 
 This document provides the detailed technical specification for UCP.
 For a complete definition of all data models and schemas, see the
 [Schema Reference](../specification/reference.md).
 
 !!! note "Terminology"
-    Throughout this documentation, **Client** refers to any entity that *consumes* capabilities — an app, an AI agent, a procurement system, or another business. **Provider** refers to any entity that *exposes* capabilities — a retailer, a supplier, a service provider, or any other participant offering commerce functionality. These roles are defined by direction of capability flow, not by industry vertical, making UCP equally applicable to B2C, B2B, and agent-to-agent commerce. The terms *platform* and *business* may appear in earlier drafts and community discussions — they are synonymous with Client and Provider respectively.
+    Throughout this documentation, **Client** refers to any entity that *consumes*
+    capabilities — an app, an AI agent, a procurement system, or another business.
+    **Provider** refers to any entity that *exposes* capabilities — a retailer, a
+    supplier, a service provider, or any other participant offering commerce
+    functionality. These roles are defined by direction of capability flow, not by
+    industry vertical, making UCP equally applicable to B2C, B2B, and agent-to-agent
+    commerce. The terms *platform* and *business* may appear in earlier drafts and
+    community discussions — they are synonymous with Client and Provider respectively.
 
 Its primary goal is to enable:
 
