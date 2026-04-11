@@ -33,7 +33,7 @@ Its primary goal is to enable:
 
 * **Consumer Platforms:** To dynamically discover and consume the capabilities business platform exposes.
 * **Business Platforms:** To declare what they offer and how they operate — once — and have any compatible platform discover and use it without bespoke integrations.
-* **Payment & Credential Providers:** To securely hold sensitive user data and issue tokens or credentials on behalf of users, so that platforms and businesses never handle raw payment or identity information directly.
+* **Payment & Credential Providers:** To securely hold sensitive user data and issue tokens or credentials on behalf of users, so that platforms and businesses never handle sensitive payment or identity information directly.
 
 ## High level architecture
 
@@ -53,13 +53,13 @@ Its primary goal is to enable:
     support fulfillment options or identity linking?").
 * **Security:** Facilitate secure, standards-based (OAuth 2.0, PCI-DSS
     compliant patterns) exchanges of sensitive user and payment data.
-* **Agentic Commerce:** Enable AI agents to act on behalf of any principal —
-    a consumer, an enterprise buyer, or an automated system — to execute
-    tasks autonomously.
+* **Agentic Commerce:** Enable AI agents to act on behalf of any principals
+    (an individual, organization, or another agent) and support different
+    modalities (human-in-the-loop, fully autonomous).
 
 ## Roles & Participants
 
-UCP defines the interactions between four primary distinct actors, each playing
+UCP defines the interactions between four distinct actors, each playing
 a specific role in the commerce lifecycle.
 
 ### Consumer Platform (Application/Agent)
@@ -83,8 +83,7 @@ and ownership of the transaction — though UCP's capability model is not limite
 to transactional use cases.
 
 * **Responsibilities:** Publishing a capability profile, declaring supported
-    services and extensions, processing capability invocations, and managing
-    the transaction or interaction lifecycle.
+    services and extensions, processing capability invocations which may be stateful or stateless.
 * **Examples:** Retailers, Airlines, Hotel Chains, Service Providers, Suppliers, Distributors.
 
 ### Credential Provider (CP)
@@ -123,8 +122,8 @@ invoke.
 Each capability is identified by a reverse-domain name (e.g.,
 `dev.ucp.shopping.checkout`) and carries a date-based version. Capabilities
 are declared in the business's UCP profile at `/.well-known/ucp` and
-repeated in every response so that the platform always knows the active
-feature set for a given interaction.
+negotiated and confirmed in every response so that the platform always knows
+the active feature set for a given interaction.
 
 The following are examples of capabilities defined in UCP — see the [Specification](../specification/overview.md) for the authoritative and up-to-date list.
 
@@ -132,14 +131,14 @@ The following are examples of capabilities defined in UCP — see the [Specifica
 | :--- | :--- | :--- |
 | `dev.ucp.shopping.checkout` | Core | Initiates and completes purchase sessions |
 | `dev.ucp.shopping.cart` | Core | Pre-checkout cart management |
-| `dev.ucp.shopping.catalog_search` | Core | Search across a business catalog |
-| `dev.ucp.shopping.catalog_lookup` | Core | Retrieve a specific product by ID |
+| `dev.ucp.shopping.catalog.search` | Core | Search across a business catalog |
+| `dev.ucp.shopping.catalog.lookup` | Core | Retrieve a specific product by ID |
 | `dev.ucp.shopping.order` | Core (webhook) | Order lifecycle events |
 | `dev.ucp.common.identity_linking` | Common | OAuth-based account linking |
 
 ### Extensions
 
-Extensions are optional modules that augment a base capability. They use the
+Extensions optionally augment a base capability. They use the
 `extends` field to declare their parent(s) and compose onto the base schema
 using JSON Schema `allOf`. Extensions appear in `ucp.capabilities[]` alongside
 core capabilities.
@@ -184,15 +183,15 @@ A single service can be accessed via multiple transport bindings:
 | **REST** | OpenAPI 3.1.0 | Standard server-to-server integrations |
 | **MCP** | OpenRPC | AI agents via Model Context Protocol |
 | **A2A** | Agent Card | Agent-to-Agent protocol integrations |
-| **Embedded** | OpenRPC | In-page embedded checkout experiences |
+| **Embedded** | OpenRPC | Embedded integrations |
 
 A business declares which transport bindings it supports within each service;
 platforms pick whichever fits their context — an AI agent may prefer MCP, a
 traditional web app may use REST.
 
-Service namespaces are also UCP's extensibility mechanism for new verticals —
-`dev.ucp.hotels` — introducible by the UCP governing body. Businesses that don't declare
-a vertical simply don't participate in it.
+Service namespaces are also UCP's extensibility mechanism for new verticals — e.g.,
+`dev.ucp.hotels` may be introduced in the future. Businesses opt in by declaring which
+services they support.
 
 ## Discovery & Capability Negotiation
 
@@ -218,8 +217,9 @@ determines the active capabilities by computing the intersection of its own
 declared capabilities with those in the platform's profile:
 
 1. **Intersect by name** — Only capabilities both parties declare are candidates.
-2. **Select version** — For each matched capability, select the highest version
-   present in both arrays. If no common version exists, the capability is excluded.
+2. **Select version** — For each matched capability, compute the set of versions
+   present in both the business and platform arrays. Select the highest (latest
+   date). If no mutual version exists, exclude the capability.
 3. **Prune orphaned extensions** — Extensions whose parent capability is not in
    the intersection are removed. Pruning repeats until stable (handles chains).
 
@@ -244,15 +244,35 @@ authentication are resolved together.
     "version": "2026-01-23",
     "services": {
       "dev.ucp.shopping": [
-        { "version": "2026-01-23", "transport": "rest", "endpoint": "https://business.example.com/ucp/v1" }
+        {
+          "version": "2026-01-23",
+          "spec": "https://ucp.dev/2026-01-23/specification/overview",
+          "transport": "rest",
+          "schema": "https://ucp.dev/2026-01-23/services/shopping/rest.openapi.json",
+          "endpoint": "https://business.example.com/ucp/v1"
+        }
       ]
     },
     "capabilities": {
-      "dev.ucp.shopping.checkout": [{ "version": "2026-01-23", "schema": "https://ucp.dev/2026-01-23/schemas/shopping/checkout.json" }],
-      "dev.ucp.shopping.fulfillment": [{ "version": "2026-01-23", "extends": "dev.ucp.shopping.checkout" }]
+      "dev.ucp.shopping.checkout": [{
+        "version": "2026-01-23",
+        "spec": "https://ucp.dev/2026-01-23/specification/checkout",
+        "schema": "https://ucp.dev/2026-01-23/schemas/shopping/checkout.json"
+      }],
+      "dev.ucp.shopping.fulfillment": [{
+        "version": "2026-01-23",
+        "spec": "https://ucp.dev/2026-01-23/specification/fulfillment",
+        "schema": "https://ucp.dev/2026-01-23/schemas/shopping/fulfillment.json",
+        "extends": "dev.ucp.shopping.checkout"
+      }]
     },
     "payment_handlers": {
-      "com.example.processor_tokenizer": [{ "id": "tokenizer_1", "version": "2026-01-23" }]
+      "com.example.processor_tokenizer": [{
+        "id": "processor_tokenizer",
+        "version": "2026-01-23",
+        "spec": "https://example.com/specs/payments/processor_tokenizer",
+        "schema": "https://example.com/specs/payments/merchant_tokenizer.json"
+      }]
     }
   },
   "signing_keys": [{ "kid": "key_2026", "kty": "EC", "crv": "P-256", "alg": "ES256" }]
@@ -272,7 +292,7 @@ registry — domain owners control their own namespace.
 | Name | Authority | Who governs |
 | :--- | :--- | :--- |
 | `dev.ucp.shopping.checkout` | ucp.dev | UCP governing body |
-| `com.shopify.checkout.v2` | shopify.com | Shopify |
+| `com.shopify.catalog` | shopify.com | Shopify |
 | `com.example.payments.installments` | example.com | example.com |
 
 The `spec` and `schema` URLs declared in a capability must originate from the
@@ -281,7 +301,7 @@ spoofed capabilities.
 
 The `dev.ucp.*` namespace is reserved exclusively for capabilities governed by
 the UCP Tech Council. Any vendor can define and publish capabilities under their
-own domain — `org.acme.*` — without UCP involvement. Vendor
+own domain — `org.acme.*` — without UCP maintainer approval. Vendor
 capabilities follow the same extension model, meaning they can extend UCP base
 capabilities (e.g., `org.acme.loyalty` extending `dev.ucp.shopping.checkout`)
 or define entirely new ones. Because negotiation is always opt-in, vendor
@@ -323,7 +343,8 @@ particular payment instrument is acquired and processed. The distinction:
 The 3-step payment lifecycle:
 
 1. **Negotiation** — The business advertises available payment handlers in its
-   profile and checkout response.
+   profile and checkout response based on contents and negotiated
+   properties of the checkout.
 2. **Acquisition** — The platform executes the handler's logic to acquire a
    payment instrument (token or encrypted payload) directly from the CP.
 3. **Completion** — The platform submits the instrument to the business, which
@@ -350,7 +371,7 @@ Key lookup:
 
 ### Authentication Mechanisms
 
-UCP is compatible with several authentication models:
+UCP supports multiple authentication models:
 
 | Mechanism | Onboarding | Notes |
 | :--- | :--- | :--- |
