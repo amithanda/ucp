@@ -34,8 +34,9 @@ it does not gate it.
 **This specification uses
 [OAuth 2.0](https://datatracker.ietf.org/doc/html/rfc6749){ target="_blank" }**
 as the v1 auth mechanism. The schema is designed for incremental extension:
-future versions will add delegated identity provider support and multi-mechanism
-negotiation without breaking changes to this version (see
+future versions will add delegated identity provider support and non-OAuth
+authentication mechanisms — both via a single `config.providers` extension
+point — without breaking changes to this version (see
 [Future Extensibility](#future-extensibility)).
 
 ### Participants
@@ -339,42 +340,38 @@ account linking.
 ## Future Extensibility
 
 This specification intentionally scopes v1 to business-hosted OAuth 2.0.
-The schema and protocol are designed to accommodate two additional auth
-patterns as non-breaking extensions in future versions:
+The schema and protocol are designed to accommodate additional auth patterns
+as non-breaking extensions in future versions:
 
-### Delegated Identity Providers (`config.providers`)
+### Delegated Identity Providers and Mechanism Extensibility (`config.providers`)
 
-A future version will allow businesses to declare trusted external OAuth
-identity providers (e.g., `com.google`, `com.shopify`) in a `config.providers`
-map, keyed by reverse-domain identifier. Platforms that have already
-established an OAuth session with a trusted provider can present a
+A future version will allow businesses to declare trusted identity providers in
+a `config.providers` map, keyed by reverse-domain identifier. Each entry carries
+a `type` discriminator that defaults to `oauth2`, making this a single extension
+point for both delegated OAuth IdPs and future non-OAuth mechanisms such as
+wallet attestation or verifiable credentials.
+
+For delegated OAuth IdPs (e.g., `com.google`, `com.shopify`): platforms that
+have already established an OAuth session with a trusted provider can present a
 JWT-based authorization grant to the business's token endpoint instead of
 initiating a new browser-based OAuth flow — useful for multi-merchant agentic
 commerce where N merchants should not require N separate consent screens.
+
+For non-OAuth mechanisms: entries with a non-`oauth2` `type` value enable
+wallet attestation and similar schemes. Platforms select the first entry whose
+`type` they support, using business-preference ordering — analogous to TLS
+cipher suite negotiation.
 
 When `config.providers` is present, the platform uses the provider selection
 and identity chaining flows defined in that version. When `config.providers` is
 absent (as in v1), platforms **MUST** fall back to direct OAuth 2.0 against the
 business domain via RFC 8414 discovery.
 
-### Multi-Mechanism Negotiation (`config.mechanisms`)
-
-A future version will allow businesses to declare support for non-OAuth
-authentication mechanisms (e.g., wallet attestation, verifiable credentials)
-via a `config.mechanisms` array. Each entry will carry a `type` discriminator
-and mechanism-specific fields. Platforms will select the first entry whose
-`type` they support, using business-preference ordering — analogous to TLS
-cipher suite negotiation.
-
-When `config.mechanisms` is present, platforms use the mechanism selection
-algorithm defined in that version. When absent (as in v1), platforms **MUST**
-treat OAuth 2.0 as the implicit mechanism.
-
 **Forward-compatibility rule for platforms:** When `config` contains fields
-not defined in this version of the spec (`providers`, `mechanisms`, or any
-other future field), platforms **MUST** ignore those fields and proceed using
-OAuth 2.0 with RFC 8414 discovery on the business domain, as defined here.
-This ensures v1 platform implementations remain valid as the spec evolves.
+not defined in this version of the spec (`providers` or any other future field),
+platforms **MUST** ignore those fields and proceed using OAuth 2.0 with RFC 8414
+discovery on the business domain, as defined here. This ensures v1 platform
+implementations remain valid as the spec evolves.
 
 ## Examples
 
