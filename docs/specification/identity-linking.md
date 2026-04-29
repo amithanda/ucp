@@ -49,16 +49,27 @@ point — without breaking changes to this version (see
 
 ### Access Levels
 
-Identity linking upgrades capabilities to user-authenticated access.
-Capabilities are **never** excluded from capability negotiation based on the
-presence or absence of identity linking — a capability is advertised and
-negotiated regardless of whether the user needs authentication.
+Capabilities operate at three access levels:
 
 | Level | Authentication | Example |
 | :---- | :------------- | :------ |
 | **Public** | None | Browse a public catalog |
 | **Agent-authenticated** | Platform credentials (`client_id` / `client_secret`) | Guest checkout, create a cart |
 | **User-authenticated** | Platform credentials + user identity token | Saved addresses, full order history, personalized pricing |
+
+Identity linking bridges agent-authenticated to user-authenticated access: the
+platform obtains a user identity token by completing the OAuth flow described
+below, and presents it on subsequent requests.
+
+**Identity linking and capability negotiation are independent layers.** A
+capability is advertised and negotiated based on its own profile presence —
+never excluded because identity linking is absent. Identity linking, when
+present, declares the **scopes** that gate user-authenticated operations
+*within* negotiated capabilities (see [Scopes](#scopes)). A merchant whose
+profile lists `dev.ucp.shopping.order` has it in the negotiated intersection
+either way. If their profile *also* lists identity linking with
+`dev.ucp.shopping.order:read` in `config.scopes`, operations covered by
+that scope require a user identity token.
 
 ## General Guidelines
 
@@ -205,8 +216,7 @@ Platform                              Business AS
 ```
 
 **Step 2 — Scope set:** Platforms derive the authorization scope set from the
-business's `config.capabilities` map (see
-[Scope Derivation](#scope-derivation)).
+business's `config.scopes` map (see [Scope Derivation](#scope-derivation)).
 Platforms **MUST** request only the derived scope set — not a superset.
 
 **Step 3 — Validation:** The platform **MUST** verify that the `state`
@@ -222,76 +232,82 @@ where `code_verifier` is absent or does not verify against the stored
 
 ## Scopes
 
-Scopes define the permissions an identified user grants to a platform for a
-given capability. Whether a capability requires user authentication — and what
-scopes govern user-scoped access — is a **business decision** declared in the
-identity linking capability config. The same capability may require user auth
-at one business and serve public requests at another.
+Scopes define the user-authenticated permissions a business grants to a
+platform. Businesses declare the scopes they offer in `config.scopes` of their
+`dev.ucp.common.identity_linking` entry. Each key is the OAuth scope string as
+it appears on the wire (`{capability}:{scope}`, e.g.
+`dev.ucp.shopping.order:read`); each value is a per-scope policy object.
 
-### Scope Naming
+Listing a scope in `config.scopes` declares that obtaining that scope requires
+user authentication. Operations not gated by any listed scope operate at
+public or agent-authenticated access.
 
-Scope tokens use the **capability name** directly as the scope identifier,
-reusing UCP's existing reverse-DNS naming for global uniqueness and eliminating
-a separate scope namespace:
+### Scope Token Format
 
-* **Coarse-grained** (no sub-scopes): the capability name is the scope.
-  Example: `dev.ucp.shopping.checkout`
-* **Fine-grained** (sub-scopes): the capability name with a colon-separated
-  operation group. Example: `dev.ucp.shopping.order:read`,
-  `dev.ucp.shopping.order:manage`
+Scope tokens follow the convention `{capability-name}:{scope-name}`:
 
-Sub-scope names are defined by each capability's own specification as named
-**operation groups** — logical groupings of operations (e.g., `read` = Get /
-List, `manage` = Cancel / Return). Each capability defines its own operation
-group names. Sub-scope tokens **MUST** match the pattern `^[a-z][a-z0-9_]*$`.
+* `dev.ucp.shopping.order:read`
+* `dev.ucp.shopping.order:manage`
+* `dev.ucp.shopping.checkout:create`
 
-Third-party capabilities follow the same convention using their own reverse-DNS
-name: `com.example.loyalty:points`.
+The capability name uses UCP's reverse-DNS naming. The scope name denotes
+the **permission** being granted — typically an operation group on a
+resource (`read`, `manage`, `write`) or an entry-point operation (`create`)
+defined by each capability's specification.
 
-### Capability Scope Configuration
+Scope names **MUST** match the pattern `^[a-z][a-z0-9_]*$`. Third-party
+capabilities follow the same convention using their own reverse-DNS name:
+`com.example.loyalty:points`.
 
-Businesses declare per-capability identity requirements in
-`config.capabilities` of their `dev.ucp.common.identity_linking` entry:
+### Per-Scope Policy and Metadata
 
-| Field | Type | Default | Description |
-| :---- | :--- | :------ | :---------- |
-| *(entry absent)* | — | — | No user-scoped features. Capability operates at public or agent-authenticated access only. |
-| `auth_required` | boolean | `false` | When `true`, business returns `identity_required` for requests without a user identity token. When `false`, user identity upgrades the experience. |
-| `scopes` | string[] | *(absent)* | Sub-scope operation groups offered by this capability. When absent, the capability name is the scope. |
+Each scope's value is an open object that carries per-scope policy and
+metadata. Empty `{}` means "user auth required, nothing else." Possible
+fields include authentication constraints (`min_acr`, `max_token_age`,
+`require_mfa`), declarative metadata (`claims` produced when granted,
+human-readable consent descriptions), or other scope-specific configuration.
+Platforms **MUST** ignore unrecognized fields.
 
 ### Scope Derivation
 
-Platforms derive the authorization scope set from the business's identity
-linking config before initiating the account linking flow:
+Platforms derive the authorization scope set from the business's
+`config.scopes` before initiating the account linking flow:
 
-1. Read `config.capabilities` from the business's
-   `dev.ucp.common.identity_linking` capability entry.
-2. Intersect the map keys with the negotiated capability set — ignore entries
-   for capabilities not present in the intersection.
-3. For each remaining entry: if `scopes` is present, expand each sub-scope to
-   `<capability-name>:<sub-scope>`; if absent, use the capability name alone.
-4. The union of all expanded scope tokens is the authorization scope set.
+1. Read `config.scopes` from the business's `dev.ucp.common.identity_linking`
+   capability entry.
+2. Filter to scopes whose capability prefix is in the negotiated capability
+   set — ignore scopes for capabilities the platform does not support.
+3. From the remaining set, select the scopes the platform intends to use
+   (informed by which operations it plans to call; see each capability's spec
+   for operation-to-scope mappings).
+4. Apply the per-scope policy on each selected scope when constructing the
+   authorization request.
 
-If the derived scope set is empty (no capabilities in the intersection appear
-in `config.capabilities`), the platform **SHOULD** skip the identity linking
-flow — there are no user-scoped features to authorize for this business.
+If no scope is required for the operations the platform intends to call, the
+platform can skip the identity linking flow — operations work with public or
+agent-authenticated access. However, linking may still be beneficial to
+unlock session-native personalization (saved addresses, member pricing, order
+history visibility, etc.); the merchant resolves these from the authenticated
+user context regardless of which scopes were granted.
 
 ### Consent Presentation
 
 Consent screens are rendered by the business's authorization server. This
 specification does not define scope description strings — the authorization
 server is responsible for presenting human-readable consent text for the
-scopes it supports. Consent screens **SHOULD** group scopes by capability
-rather than listing individual operations: for example, "Allow [platform] to
-view your order history".
+scopes it supports. Consent screens **SHOULD** group related scopes
+intelligibly rather than listing individual operations: for example, "Allow
+[platform] to view your order history" rather than "grant
+`dev.ucp.shopping.order:read`."
 
 ## Error Handling
 
 ### `identity_required`
 
-When a capability is configured with `auth_required: true` and a request arrives
-without a valid user identity token, the business **MUST** return a UCP error
-response containing a message with `code: "identity_required"`.
+When an operation is gated by a scope listed in `config.scopes` and the
+request arrives without a valid user identity token, the business **MUST**
+return a UCP error response containing a message with
+`code: "identity_required"`.
 
 The business **MAY** include a `continue_url` in the response body, pointing to
 a URL where the user can complete account creation or onboarding (e.g., terms
@@ -394,7 +410,6 @@ Example metadata hosted at `/.well-known/oauth-authorization-server` per
   "revocation_endpoint": "https://merchant.example.com/oauth2/revoke",
   "jwks_uri": "https://merchant.example.com/oauth2/jwks",
   "scopes_supported": [
-    "dev.ucp.shopping.checkout",
     "dev.ucp.shopping.order:read",
     "dev.ucp.shopping.order:manage"
   ],
@@ -413,8 +428,12 @@ Both **MUST** be present in UCP-compliant metadata.
 
 ### Business Profile (`/.well-known/ucp`)
 
-A business that requires user identity for order management but serves
-checkout without it:
+The shape of `config.scopes` reflects the business's policy.
+
+#### B2C retailer
+
+Public catalog, guest checkout (no scope required), user-bound order
+operations gated:
 
 ```json
 {
@@ -425,12 +444,9 @@ checkout without it:
         "spec": "https://ucp.dev/specification/identity-linking",
         "schema": "https://ucp.dev/schemas/common/identity_linking.json",
         "config": {
-          "capabilities": {
-            "dev.ucp.shopping.checkout": {},
-            "dev.ucp.shopping.order": {
-              "auth_required": true,
-              "scopes": ["read", "manage"]
-            }
+          "scopes": {
+            "dev.ucp.shopping.order:read":    {},
+            "dev.ucp.shopping.order:manage":  {}
           }
         }
       }]
@@ -441,36 +457,71 @@ checkout without it:
 
 **Reading this config:**
 
-* `dev.ucp.shopping.checkout`: present in the map, no `auth_required` flag
-  (defaults to `false`) → user identity upgrades the experience
-  (e.g., pre-filled address) but is not required. Scope token: `dev.ucp.shopping.checkout`.
-* `dev.ucp.shopping.order`: `auth_required: true` → business returns
-  `identity_required` without a user token. Scope tokens:
-  `dev.ucp.shopping.order:read`, `dev.ucp.shopping.order:manage`.
-* Any capability not listed (e.g., `dev.ucp.shopping.cart`) → no
-  user-scoped features; operates at public / agent-authenticated level only.
+* `dev.ucp.shopping.order:read` and `:manage` — listed → user auth required
+  to obtain.
+* Catalog, checkout, cart, and everything else — not listed → no user-auth
+  scope required. Public/agent-authenticated access. The user may still
+  request, or the agent may still offer, linking to access additional
+  capabilities such as personalization, saved addresses and credentials,
+  loyalty pricing, etc.
+
+#### B2B wholesaler
+
+No guest checkout — every transaction requires an authenticated user:
+
+```json
+{
+  "ucp": {
+    "capabilities": {
+      "dev.ucp.common.identity_linking": [{
+        "version": "Working Draft",
+        "spec": "https://ucp.dev/specification/identity-linking",
+        "schema": "https://ucp.dev/schemas/common/identity_linking.json",
+        "config": {
+          "scopes": {
+            "dev.ucp.shopping.checkout:create":  {},
+            "dev.ucp.shopping.order:read":       {},
+            "dev.ucp.shopping.order:manage":     {}
+          }
+        }
+      }]
+    }
+  }
+}
+```
+
+**The difference:** `dev.ucp.shopping.checkout:create` is now listed. The
+B2C example doesn't gate checkout creation; anyone can start a guest
+session. This merchant requires the user to be authenticated before
+creating a checkout. Subsequent operations on that session (update,
+complete, cancel) are session-bound and require no additional scope.
+
+Whether the user is B2B-eligible, what pricing they see, what payment terms
+apply — those are user attributes the merchant resolves at runtime, not
+additional scopes.
 
 ### End-to-End Walkthrough
 
-**Setup:** Platform (AI shopping agent) + Business (merchant with checkout
-and order capabilities).
+**Setup:** Platform (AI shopping agent) + Business (B2C retailer from the
+example above).
 
 **Negotiated capabilities:** `dev.ucp.shopping.checkout`,
 `dev.ucp.shopping.order`, `dev.ucp.common.identity_linking`.
 
-**Step 1 — Scope derivation.** Platform reads business's
-`config.capabilities`:
+**Step 1 — Scope derivation.** Platform reads business's `config.scopes`:
 
-* `dev.ucp.shopping.checkout` → scope: `dev.ucp.shopping.checkout`
-* `dev.ucp.shopping.order` (scopes: `["read", "manage"]`) → scopes:
-  `dev.ucp.shopping.order:read`, `dev.ucp.shopping.order:manage`
+* `dev.ucp.shopping.order:read` (read order history)
+* `dev.ucp.shopping.order:manage` (cancel/return)
 
-Derived scope set: `dev.ucp.shopping.checkout dev.ucp.shopping.order:read dev.ucp.shopping.order:manage`
+The user wants the agent to be able to read order history and cancel orders
+on their behalf, so the platform requests both scopes.
+
+Derived scope set: `dev.ucp.shopping.order:read dev.ucp.shopping.order:manage`
 
 **Step 2 — Discovery.** Platform fetches
 `https://merchant.example.com/.well-known/oauth-authorization-server`,
 receives `2xx`, extracts `authorization_endpoint` and `token_endpoint`.
-Verifies `dev.ucp.shopping.order:read` is in `scopes_supported`.
+Verifies both scopes are in `scopes_supported`.
 
 **Step 3 — Authorization request.** Platform generates PKCE pair
 (`code_verifier`, `code_challenge`), sends the user to:
@@ -480,7 +531,7 @@ GET https://merchant.example.com/oauth2/authorize
   ?response_type=code
   &client_id=platform-client-id
   &redirect_uri=https://agent.example.com/callback
-  &scope=dev.ucp.shopping.checkout dev.ucp.shopping.order:read dev.ucp.shopping.order:manage
+  &scope=dev.ucp.shopping.order:read dev.ucp.shopping.order:manage
   &code_challenge=<S256-hash>
   &code_challenge_method=S256
   &state=<random>
@@ -522,7 +573,7 @@ Business validates `code_verifier` against stored `code_challenge`, returns:
   "token_type": "Bearer",
   "expires_in": 3600,
   "refresh_token": "<refresh>",
-  "scope": "dev.ucp.shopping.checkout dev.ucp.shopping.order:read dev.ucp.shopping.order:manage"
+  "scope": "dev.ucp.shopping.order:read dev.ucp.shopping.order:manage"
 }
 ```
 
