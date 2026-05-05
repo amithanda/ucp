@@ -11,6 +11,12 @@
       "type": "object",
       "title": "Scope Policy",
       "description": "Per-scope policy and metadata — auth constraints (e.g. min_acr, max_token_age), declarative metadata (e.g. claims produced, consent descriptions), or any other scope-specific configuration. An empty object means user authentication is required with no additional policy. Open for non-breaking extension.",
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "Human-readable explanation of what this scope represents."
+        }
+      },
       "additionalProperties": true
     },
 
